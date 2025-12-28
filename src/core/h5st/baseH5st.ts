@@ -6,11 +6,25 @@
 
 import * as CryptoJS from 'crypto-js';
 import { Logger } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
 import { ClsService } from 'nestjs-cls';
 import { Cache } from 'nestjs-cache-manager-v6';
+import { firstValueFrom } from 'rxjs';
 import { H5stInitConfig } from './config';
-import { CANVAS_FP, STORAGE_FP_KEY, STORAGE_TOKEN_KEY, WEBGL_FP } from './constant';
-import { DebugParamsType, defaultAlgorithmType, EnvCollectType, ErrCodes, H5stAlgoConfigType, H5stSignParamsType, H5stSignResultType, KVType, SignAlgorithmType } from './type';
+import { CANVAS_FP, STORAGE_ALGO_KEY, STORAGE_FP_KEY, STORAGE_TOKEN_KEY, WEBGL_FP } from './constant';
+import {
+  AlgoResponseType,
+  DebugParamsType,
+  defaultAlgorithmType,
+  EnvCollectType,
+  ErrCodes,
+  H5stAlgoConfigType,
+  H5stSignParamsType,
+  H5stSignResultType,
+  KVType,
+  SignAlgorithmType,
+} from './type';
 import { BaseLocalToken } from '../token';
 import { CustomAlgorithm } from '../algorithm';
 import {
@@ -39,6 +53,7 @@ export class BaseH5st {
     protected readonly h5stVersion: string,
     protected readonly h5stAlgoConfig: H5stAlgoConfigType,
     protected readonly localToken: BaseLocalToken,
+    protected readonly httpService: HttpService,
   ) {
     this.defaultAlgorithm = {
       local_key_1: (message: CryptoJS.lib.WordArray | string) => this.algos.MD5(message),
@@ -98,6 +113,7 @@ export class BaseH5st {
       // fp 大版本一致，但是 token 小版本不一致，区分
       this.clsService.set('h5stContext._storageFpKey', `${STORAGE_FP_KEY}_${appId}_${this.h5stAlgoConfig.version}`);
       this.clsService.set('h5stContext._storageTokenKey', `${STORAGE_TOKEN_KEY}_${appId}_${this.h5stVersion}`);
+      this.clsService.set('h5stContext._storageAlgoKey', `${STORAGE_ALGO_KEY}_${appId}_${this.h5stVersion}`);
     }
 
     this.clsService.set('h5stContext._debug', Boolean(config.debug));
@@ -180,6 +196,23 @@ export class BaseH5st {
     return token ? token.slice(begin, end) : '';
   }
 
+  async __parseAlgorithm() {
+    const { _storageTokenKey, _storageAlgoKey } = this.clsService.get('h5stContext');
+    const enableRemote = process.env.ENABLE_REMOTE_ALGORITHM === 'true';
+
+    const token = await this.getSync(_storageTokenKey),
+      algo = await this.getSync(_storageAlgoKey);
+
+    if (enableRemote && token && algo) {
+      this.clsService.set('h5stContext._token', token);
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call
+      this.clsService.set('h5stContext.__genKey', new Function(`return ${algo}`)());
+      this.clsService.set('h5stContext._isNormal', true);
+    } else {
+      this.clsService.set('h5stContext._isNormal', false);
+    }
+  }
+
   /**
    * 组装H5ST签名
    * @param {string} bodySign
@@ -242,6 +275,10 @@ export class BaseH5st {
    */
   async __requestDeps(debugParams: DebugParamsType): Promise<void> {
     this._log('__requestDeps start.');
+
+    const { _storageTokenKey, _storageAlgoKey } = this.clsService.get('h5stContext');
+    const enableRemote = process.env.ENABLE_REMOTE_ALGORITHM === 'true';
+
     let fingerprint = debugParams?.fingerprint || (await this.getSync(this.clsService.get('h5stContext._storageFpKey')));
     if (fingerprint) {
       this._log(`__requestDeps use cache fp, fp:${fingerprint}`);
@@ -251,7 +288,93 @@ export class BaseH5st {
       this._log(`__requestDeps use new fp, fp:${fingerprint}`);
     }
     this.clsService.set('h5stContext._fingerprint', fingerprint);
+
+    if (enableRemote) {
+      const token = await this.getSync(_storageTokenKey),
+        algo = await this.getSync(_storageAlgoKey);
+      if (!token || !algo) {
+        try {
+          await this.__requestAlgorithm(debugParams);
+        } catch (t) {
+          this._log(`__requestDeps request token failed, error: ${t}`);
+        }
+      } else {
+        this._log(`__requestDeps, use cache token, token:${token}`);
+      }
+    }
+
+    await this.__parseAlgorithm();
     this._log('__requestDeps end.');
+  }
+
+  async __requestAlgorithm(debugParams: DebugParamsType) {
+    const { _appId, _fingerprint, userAgent, _storageFpKey, _storageTokenKey, _storageAlgoKey } = this.clsService.get('h5stContext');
+    this._log('__requestAlgorithm start.');
+    const env = debugParams?.fullEnv || (await this.envCollect(0));
+    const envCollectData = JSON.stringify(
+      {
+        ...env,
+        ai: _appId,
+        fp: _fingerprint,
+      },
+      null,
+      2,
+    );
+    this._log(`__requestAlgorithm envCollect=${envCollectData}`);
+
+    try {
+      const { data }: { data: AlgoResponseType } = await firstValueFrom(
+        this.httpService.post<AlgoResponseType>(
+          'https://cactus.jd.com/request_algo',
+          {
+            version: this.h5stAlgoConfig.version,
+            fp: _fingerprint,
+            appId: _appId,
+            timestamp: Date.now(),
+            platform: 'web',
+            expandParams: this.envSign(envCollectData, 'wm0!@w-s#ll1flo('),
+            fv: this.h5stAlgoConfig.env.fv,
+            localTk: this.localToken.genLocalTK(_fingerprint)
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json;charset=utf-8',
+              Origin: 'https://cactus.jd.com',
+              Host: 'cactus.jd.com',
+              accept: '*/*',
+              'User-Agent': userAgent,
+            },
+          },
+        ),
+      );
+
+      if (data?.status === 200 && data?.data?.result) {
+        const result = data.data.result;
+        if (result.algo && result.tk && result.fp) {
+          const isFpMatch = result.fp === _fingerprint;
+          const storedFp = isFpMatch ? await this.getSync(_storageFpKey) : '';
+          const isStoredFpMatch = storedFp && result.fp === storedFp;
+          if (isStoredFpMatch) {
+            const expireHex = this.__parseToken(result.tk, 13, 15);
+            const expireHours = parseInt(expireHex, 16);
+            const expireSeconds = expireHours * 60 * 60 * 1000;
+            await this.setSync(_storageTokenKey, result.tk, expireSeconds);
+            await this.setSync(_storageAlgoKey, result.algo, expireSeconds);
+          }
+          this._log(
+            `__requestAlgorithm request success!, check memory fp:${isFpMatch}, check storage fp:${isStoredFpMatch}, token:${result.tk}, storageFp:${storedFp}, fp:${result.fp}`,
+          );
+        } else {
+          throw new Error('data.result format error.');
+        }
+      } else {
+        throw new Error('request params error.');
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      throw new Error(`request error, ${axiosError.code ?? ''}, ${axiosError.message ?? ''}`);
+    }
+    this._log('__requestAlgorithm end.');
   }
 
   /**
@@ -317,8 +440,7 @@ export class BaseH5st {
    * @param debugParams 调试参数
    */
   __makeSign(params: KVType[], envSign: string, debugParams: DebugParamsType): H5stSignResultType {
-    const appId = this.clsService.get('h5stContext._appId'),
-      fingerprint = this.clsService.get('h5stContext._fingerprint'),
+    const { _appId, _fingerprint, __genKey, _token, _isNormal } = this.clsService.get('h5stContext'),
       extendDateStr = this.h5stAlgoConfig.makeSign.extendDateStr,
       offset = this.h5stAlgoConfig.makeSign.offset || 0;
 
@@ -326,10 +448,22 @@ export class BaseH5st {
       dateStr = formatDate(now + offset, 'yyyyMMddhhmmssSSS'),
       dateStrExtend = dateStr + extendDateStr;
 
-    const defaultToken = debugParams?.token || this.localToken.genLocalTK(fingerprint);
+    const enableRemote = process.env.ENABLE_REMOTE_ALGORITHM === 'true';
+    let key = '';
+    
+    if (enableRemote && _isNormal && __genKey) {
+      try {
+        key = __genKey(debugParams?.token || _token, _fingerprint, dateStrExtend, _appId, this.algos).toString(this.algos.enc.Hex) || '';
+      } catch (e) {
+        this._log(`__makeSign remote algorithm failed: ${e}, fallback to local`);
+      }
+    }
 
-    const key = this.__genDefaultKey(defaultToken, fingerprint, dateStrExtend, appId);
-    this.clsService.set('h5stContext._defaultToken', defaultToken);
+    if (!key) {
+      const defaultToken = debugParams?.token || this.localToken.genLocalTK(_fingerprint);
+      key = this.__genDefaultKey(defaultToken, _fingerprint, dateStrExtend, _appId);
+      this.clsService.set('h5stContext._defaultToken', defaultToken);
+    }
 
     if (!key) {
       return {};
@@ -383,7 +517,7 @@ export class BaseH5st {
   async __collect(debugParams: DebugParamsType) {
     const fingerprint = this.clsService.get('h5stContext._fingerprint');
 
-    const env = debugParams?.env || (await this.envCollect());
+    const env = debugParams?.env || (await this.envCollect(1));
     env.fp = fingerprint;
     const envStr = JSON.stringify(env, null, 2);
     this._log(`__collect envCollect=${envStr}`);
@@ -393,11 +527,20 @@ export class BaseH5st {
   /**
    * h5st 加签入口
    */
-  async sign(params: H5stSignParamsType, h5stInitConfig: H5stInitConfig, envSignStr?: string, debugParams?: DebugParamsType): Promise<H5stSignParamsType & H5stSignResultType> {
+  async sign(
+    params: H5stSignParamsType,
+    h5stInitConfig: H5stInitConfig,
+    envSignStr?: string,
+    debugParams?: DebugParamsType,
+    fullEnvStr?: string,
+  ): Promise<H5stSignParamsType & H5stSignResultType> {
     const start = Date.now();
     this.__iniConfig(Object.assign({}, new H5stInitConfig(), h5stInitConfig));
     if (envSignStr) {
-      this.envDecrypt(envSignStr);
+      this.envDecrypt(envSignStr, false);
+    }
+    if (fullEnvStr) {
+      this.envDecrypt(fullEnvStr, true);
     }
 
     const keys = this.clsService.get('h5stContext.stk');
@@ -425,14 +568,15 @@ export class BaseH5st {
 
   /**
    * 收集环境信息
+   * @param mode 0=完整env(请求algo接口), 1=简化env(普通生成)
    * @returns {EnvCollectType}
    */
-  async envCollect(): Promise<EnvCollectType> {
-    const envExtend = this.clsService.get('h5stContext.envExtend'),
+  async envCollect(mode = 1): Promise<EnvCollectType> {
+    const envExtend = mode == 1 ? this.clsService.get('h5stContext.envExtend') : this.clsService.get('h5stContext.fullEnvExtend'),
       randomLength = this.h5stAlgoConfig.env.randomLength,
       extendRandomLength = this.h5stAlgoConfig.env.extendRandomLength;
 
-    return this.coverEnv(envExtend, envExtend?.random?.length ?? randomLength, envExtend?.extend?.random?.length ?? extendRandomLength);
+    return this.coverEnv(envExtend, envExtend?.random?.length ?? randomLength, envExtend?.extend?.random?.length ?? extendRandomLength, mode);
   }
 
   /**
@@ -480,14 +624,16 @@ export class BaseH5st {
 
   /**
    * env 加密
+   * @param message 待加密的消息
+   * @param customSecret 自定义密钥（可选），如果不提供则使用配置中的密钥
    */
-  envSign(message: string): string {
+  envSign(message: string, customSecret?: string): string {
     // 4.8.1开始不在使用AES算法，借助 Hex 魔改参数定位
     if (!isNullOrUndefined(this.h5stAlgoConfig.customAlgorithm?.convertIndex?.hex)) {
       return this.algos.enc.Base64.encode(this.algos.enc.Utf8.parse(message));
     }
 
-    const secret = this.h5stAlgoConfig.env.secret;
+    const secret = customSecret ?? this.h5stAlgoConfig.env.secret;
     const temp = this.algos.AES.encrypt(message, secret, {
       iv: this.algos.enc.Utf8.parse('0102030405060708'),
     });
@@ -503,8 +649,9 @@ export class BaseH5st {
   /**
    * Env 解密，并且存入当前上下文，用于后续生成新的 Env
    * @param envSign Env密文
+   * @param isFull 是否为完整版env
    */
-  envDecrypt(envSign: string) {
+  envDecrypt(envSign: string, isFull = false) {
     try {
       let envDecrypt: string;
       // 4.8.1开始不在使用AES算法，借助 Hex 魔改参数定位
@@ -526,7 +673,7 @@ export class BaseH5st {
           envDecrypt = envDecrypt.slice(0, -salt.length);
         }
       }
-      this.clsService.set('h5stContext.envExtend', JSON.parse(envDecrypt));
+      this.clsService.set(isFull ? 'h5stContext.fullEnvExtend' : 'h5stContext.envExtend', JSON.parse(envDecrypt));
     } catch (error) {
       throw new BusinessError(`h5st解析失败，请确定提供的h5st与version匹配！${(error as Error).message}`);
     }
@@ -537,16 +684,19 @@ export class BaseH5st {
    * @param envExtend 接口提供的官方生成的 Env 解密对象
    * @param randomLength env.random 的长度
    * @param extendRandomLength env.extend.random 的长度
+   * @param mode 0=完整env(请求algo接口), 1=简化env(普通生成)
    * @returns 新的 Env 对象
    */
-  private async coverEnv(envExtend: EnvCollectType, randomLength: number, extendRandomLength: number): Promise<EnvCollectType> {
-    const { pt_pin, userAgent } = this.clsService.get('h5stContext');
+  private async coverEnv(envExtend: EnvCollectType, randomLength: number, extendRandomLength: number, mode = 1): Promise<EnvCollectType> {
+    const { pt_pin, userAgent, _fingerprint, _appId } = this.clsService.get('h5stContext');
     const extend = this.clsService.get('h5stContext.genLocalTK.cipher.extend');
 
+    // 随机生成设备指纹
     const canvas = await this.getCanvasFp(),
       webglFp = await this.getWebgFp();
 
-    const updateEnv: EnvCollectType = {
+    // 根据上下文生成基础的env obj
+    const baseEnv: EnvCollectType = {
       pp: (() => {
         const ptPin = pt_pin;
         if (ptPin) {
@@ -576,35 +726,92 @@ export class BaseH5st {
 
     if (envExtend) {
       Object.keys(envExtend).forEach((key: keyof EnvCollectType) => {
-        if (updateEnv[key] !== undefined) {
+        if (baseEnv[key] !== undefined) {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
-          envExtend[key] = updateEnv[key];
+          envExtend[key] = baseEnv[key];
         }
       });
     } else {
-      envExtend = {
-        ...updateEnv,
-        extend: {
+      if (mode == 1) {
+        envExtend = {
+          ...baseEnv,
+          extend: {
+            wd: 0,
+            l: 0,
+            ls: 5,
+            wk: 0,
+            bu1: '0.1.6',
+            bu3: 10,
+            bu4: 0,
+            bu5: 0,
+            bu6: 13,
+            bu7: 0,
+            bu8: 0,
+            bu12: -8,
+            bu10: 14,
+            bu11: 2,
+            bu13: 'Fl',
+          },
+          pf: 'Win32',
+          v: this.h5stAlgoConfig.env.fv,
+          bu4: '-1',
+          ccn: 12,
+          fp: _fingerprint,
+        };
+      } else {
+        envExtend = {
+          ...baseEnv,
+          wc: 0,
           wd: 0,
-          l: 0,
-          ls: 5,
+          l: 'zh-CN',
+          ls: 'zh-CN,en',
+          ml: 2,
+          pl: 5,
+          av: (() => {
+            const av = userAgent.match(/(?<=\/)[0-9]\.0[^'"\n]+/g);
+            return av.length > 0 ? av[0] : '';
+          })(),
+          ua: userAgent,
+          extend: {
+            wd: 0,
+            l: 0,
+            ls: 5,
+            wk: 0,
+            bu1: '0.1.6',
+            bu3: 9,
+            bu4: 0,
+            bu5: 0,
+            bu6: 13,
+            bu7: 0,
+            bu8: 0,
+            bu12: -8,
+            bu10: 14,
+            bu11: 2,
+            bu13: 'Fl',
+          },
+          pp1: '',
+          bu1: '',
+          w: 2560,
+          h: 1440,
+          ow: 1726,
+          oh: 1008,
+          url: 'https://search.jd.com/',
+          og: 'https://search.jd.com',
+          pf: 'Win32',
+          pr: 1,
+          re: '',
+          referer: '',
+          v: this.h5stAlgoConfig.env.fv,
+          bu2: '    at https://storage.360buyimg.com/webcontainer/js_security_v3_0.1.6.js?v=:9854:18',
+          bu3: 'function Window() { [native code] }$function toString() { [native code] }',
+          bu4: '0',
+          ccn: 12,
+          ai: _appId,
+          fp: _fingerprint,
           wk: 0,
-          bu1: '0.1.5',
-          bu3: 32,
-          bu4: 0,
-          bu5: 0,
-          bu6: 34,
-          bu7: 0,
-          bu8: 0,
-          bu12: -8,
-          bu10: 14,
-          bu11: 2,
-          bu13: 'Fg',
-        },
-        v: this.h5stAlgoConfig.env.fv,
-        fp: this.clsService.get('h5stContext._fingerprint'),
-      };
+        };
+      }
     }
 
     if (extendRandomLength) {

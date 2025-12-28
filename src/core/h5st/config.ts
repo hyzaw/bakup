@@ -1703,6 +1703,145 @@ class H5st523AlgoConfig implements H5stAlgoConfigType {
   };
 }
 
+class H5st524AlgoConfig implements H5stAlgoConfigType {
+  genSignDefault = true;
+  genSignDefaultStr = 'appid:appid&functionid:functionId';
+  genSignStk = true;
+  tokenVersion = LocalTokenVersion['05'];
+  signAlgorithmType = SignAlgorithmType.HMAC_SHA256_WRAP;
+  version = '5.2';
+  env = {
+    fv: 'h5_file_v5.2.4',
+    randomLength: 12,
+    extendRandomLength: 13,
+  };
+  visitKey = h5st52VisitKey;
+  defaultKey = {
+    extend: 'fu2dSD',
+  };
+  makeSign = {
+    extendDateStr: '23',
+    // offset: 4013,
+    offset: 4000,
+  };
+  genLocalTK = {
+    baseInfo: normal05TokenBaseInfo,
+    cipher: {
+      prefix: '1a',
+      extend: {
+        dict: '0123456789almnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-',
+        index: 6,
+        magic: '3',
+      },
+    },
+  };
+  customAlgorithm = {
+    salt: '*hdj61',
+    map: 'hgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkji',
+    convertIndex: {
+      hex: 5,
+      hmac: 4,
+    },
+    transformMessageOptions: {
+      map: 'YXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkjihgfedcbaZ',
+      segments: 11,
+      multiplier: 7,
+    },
+  };
+}
+
+class H5st525AlgoConfig implements H5stAlgoConfigType {
+  genSignDefault = true;
+  genSignDefaultStr = 'appid:appid&fnuctionId:functionId';
+  genSignStk = true;
+  tokenVersion = LocalTokenVersion['05'];
+  signAlgorithmType = SignAlgorithmType.MD5_WRAP;
+  version = '5.2';
+  env = {
+    fv: 'h5_file_v5.2.5',
+    randomLength: 12,
+    extendRandomLength: 12,
+  };
+  visitKey = h5st52VisitKey;
+  defaultKey = {
+    extend: '4C7?KD',
+  };
+  makeSign = {
+    extendDateStr: '49',
+    offset: 4000,
+  };
+  genLocalTK = {
+    baseInfo: normal05TokenBaseInfo,
+    cipher: {
+      prefix: '2d',
+      extend: {
+        dict: '0123456789abcdefghijkvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-',
+        index: 1,
+        magic: '2',
+      },
+    },
+  };
+  customAlgorithm = {
+    salt: 'IR]dev',
+    map: 'hgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkji',
+    convertIndex: {
+      hex: 8,
+      hmac: 7,
+    },
+    transformMessageOptions: {
+      map: 'srqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvut',
+      segments: 10,
+      multiplier: 23,
+    },
+  };
+}
+
+class H5st526AlgoConfig implements H5stAlgoConfigType {
+  genSignDefault = true;
+  genSignDefaultStr = 'appId:appid&functionId:functionId';
+  genSignStk = true;
+  tokenVersion = LocalTokenVersion['05'];
+  signAlgorithmType = SignAlgorithmType.MD5_WRAP;
+  version = '5.2';
+  env = {
+    fv: 'h5_file_v5.2.6',
+    randomLength: 10,
+    extendRandomLength: 9,
+  };
+  visitKey = h5st52VisitKey;
+  defaultKey = {
+    extend: 'v!g,MC',
+  };
+  makeSign = {
+    extendDateStr: '33',
+    offset: 5000,
+  };
+  genLocalTK = {
+    baseInfo: normal05TokenBaseInfo,
+    cipher: {
+      prefix: '66',
+      extend: {
+        dict: '0123456789almnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-',
+        index: 4,
+        magic: '2',
+      },
+    },
+  };
+  customAlgorithm = {
+    salt: '3s||sz',
+    map: 'hgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkji',
+    convertIndex: {
+      hex: 7,
+      hmac: 4,
+    },
+    transformMessageOptions: {
+      map: 'rqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvuts',
+      segments: 11,
+      multiplier: 3,
+    },
+  };
+}
+
 class Xcx310AlgoConfig implements H5stAlgoConfigType {
   version = '3.1';
   tokenVersion = LocalTokenVersion['03'];
@@ -1896,6 +2035,9 @@ export const H5stAlgoConfigCollection: Record<string, H5stAlgoConfigType> = {
   '5.2.1': new H5st521AlgoConfig(),
   '5.2.2': new H5st522AlgoConfig(),
   '5.2.3': new H5st523AlgoConfig(),
+  '5.2.4': new H5st524AlgoConfig(),
+  '5.2.5': new H5st525AlgoConfig(),
+  '5.2.6': new H5st526AlgoConfig(),
   'xcx3.1.0': new Xcx310AlgoConfig(),
   'xcx4.2.0': new Xcx420AlgoConfig(),
   'xcx4.7.1': new Xcx471AlgoConfig(),
@@ -1903,6 +2045,6 @@ export const H5stAlgoConfigCollection: Record<string, H5stAlgoConfigType> = {
   'xcx4.9.2': new Xcx492AlgoConfig(),
 };
 
-export const DEFAULT_H5ST_VERION = '5.2.3';
+export const DEFAULT_H5ST_VERION = '5.2.6';
 export const SUPPORT_H5ST_VERION = Object.keys(H5stAlgoConfigCollection);
 export const SUPPORT_H5ST_VERION_STR = SUPPORT_H5ST_VERION.join('、') + '。默认版本：' + DEFAULT_H5ST_VERION;

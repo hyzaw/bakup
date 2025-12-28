@@ -5,6 +5,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { BaseH5st } from './h5st';
 import { ClsService } from 'nestjs-cls';
 import { Cache, CACHE_MANAGER } from 'nestjs-cache-manager-v6';
@@ -21,9 +22,10 @@ export class H5stFactory {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly tokenFactory: TokenFactory,
     private readonly customAlgorithm: CustomAlgorithm,
+    private readonly httpService: HttpService,
   ) {
     for (const [version, config] of Object.entries(H5stAlgoConfigCollection)) {
-      this.instances.set(version, new BaseH5st(clsService, cacheManager, customAlgorithm, version, config, tokenFactory.getInstance(config.tokenVersion)));
+      this.instances.set(version, new BaseH5st(clsService, cacheManager, customAlgorithm, version, config, tokenFactory.getInstance(config.tokenVersion), httpService));
     }
   }
 

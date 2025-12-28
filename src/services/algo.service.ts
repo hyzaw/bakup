@@ -44,7 +44,7 @@ export class AlgoService {
       };
     }
 
-    const signResult = await instance.sign(reqBody.body, config, envSignStr, reqBody.debugParams);
+    const signResult = await instance.sign(reqBody.body, config, envSignStr, reqBody.debugParams, reqBody.envStr);
     return new H5stRes(signResult, Object.assign(reqBody.body, { h5st: signResult.h5st }));
   }
 

@@ -7,6 +7,7 @@
 import { v4 } from 'uuid';
 import { Request } from 'express';
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { WinstonModule } from 'nest-winston';
 import { ClsModule, ClsService } from 'nestjs-cls';
 import { CacheModule } from 'nestjs-cache-manager-v6';
@@ -46,6 +47,7 @@ import { TokenFactory, H5stFactory } from './core';
       useClass: WinstonConfigService,
       inject: [ClsService],
     }),
+    HttpModule,
   ],
   controllers: [AppController, AlgoController, CommandController],
   providers: [CustomAlgorithm, LocalTokenV3, LocalTokenV4, LocalTokenV5, TokenFactory, H5stFactory, AlgoService, CommandService],

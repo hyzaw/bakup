@@ -21,7 +21,7 @@ export interface H5stAlgoContextType {
   /* 以下是每个线程的私有定义 */
   _debug: boolean;
   _isNormal: boolean;
-  __genKey: (token: string, fingerprint: string, dateStrExtend: string, appId: string, algo: typeof CryptoJS) => string;
+  __genKey: (token: string, fingerprint: string, dateStrExtend: string, appId: string, algo: any) => CryptoJS.lib.WordArray;
   _storageTokenKey: string;
   _storageAlgoKey: string;
   _storageFpKey: string;
@@ -31,6 +31,7 @@ export interface H5stAlgoContextType {
   _token: string;
   _defaultToken: string;
   envExtend?: EnvCollectType;
+  fullEnvExtend?: EnvCollectType;
   userAgent: string;
   pt_pin: string;
   stk: string[];
@@ -117,7 +118,10 @@ export interface EnvCollectType {
   url?: string | number;
   og?: string | number;
   pf?: string | number;
+  bu1?: string | number;
   bu2?: string | number;
+  bu3?: string | number;
+  bu4?: string | number;
   canvas?: string;
   canvas1?: string;
   webglFp?: string;
@@ -128,6 +132,7 @@ export interface EnvCollectType {
   re?: string | number;
   referer?: string | number;
   pp1?: string | number;
+  wk?: string | number;
 }
 
 export interface EnvPpType {
@@ -212,4 +217,27 @@ export interface DebugParamsType {
   fingerprint: string;
   token: string;
   env: EnvCollectType;
+  fullEnv: EnvCollectType;
+}
+
+/**
+ * request_algo 接口响应类型
+ */
+export interface AlgoResultType {
+  tk: string;
+  fp: string;
+  algo: string;
+}
+
+export interface AlgoResponseDataType {
+  version: string;
+  result: AlgoResultType;
+  rConfig: Record<string, unknown>;
+  ts: number;
+}
+
+export interface AlgoResponseType {
+  status: number;
+  message: string;
+  data: AlgoResponseDataType;
 }

@@ -62,11 +62,14 @@ export class H5stReqBody {
   @IsNotEmpty({ message: 'h5st 和 appId 不能同时为空' })
   appId: string;
 
+  @Type(() => String)
+  envStr: string;
+
   debug: boolean;
 
   debugParams: DebugParamsType;
 
-  stk: string[] = ['functionId', 'appid', 'client', 'body', 'clientVersion', 'sign', 't', 'jsonp', 'seg_enc', 'verifytoken', 's_token', 'country_code', 'checkcode'];
+  stk: string[] = ['functionId', 'appid', 'client', 'body', 'clientVersion', 'sign', 'r', 't', 'jsonp', 'seg_enc', 'verifytoken', 's_token', 'country_code', 'checkcode'];
 }
 
 export class SignReqBody {
