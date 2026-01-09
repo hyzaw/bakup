@@ -1842,6 +1842,52 @@ class H5st526AlgoConfig implements H5stAlgoConfigType {
   };
 }
 
+class H5st527AlgoConfig implements H5stAlgoConfigType {
+  genSignDefault = true;
+  genSignDefaultStr = 'appId:appid&functionId:functionId';
+  genSignStk = true;
+  tokenVersion = LocalTokenVersion['05'];
+  signAlgorithmType = SignAlgorithmType.MD5_WRAP;
+  version = '5.2';
+  env = {
+    fv: 'h5_file_v5.2.7',
+    randomLength: 11,
+    extendRandomLength: 12,
+  };
+  visitKey = h5st52VisitKey;
+  defaultKey = {
+    extend: 'V&6(3R',
+  };
+  makeSign = {
+    extendDateStr: '40',
+    offset: 6000,
+  };
+  genLocalTK = {
+    baseInfo: normal05TokenBaseInfo,
+    cipher: {
+      prefix: 'b7',
+      extend: {
+        dict: '0123456789abcdefghijklmnozABCDEFGHIJKLMNOPQRSTUVWXYZ_-',
+        index: 3,
+        magic: '2',
+      },
+    },
+  };
+  customAlgorithm = {
+    salt: 'crDf.u',
+    map: 'hgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkji',
+    convertIndex: {
+      hex: 9,
+      hmac: 2,
+    },
+    transformMessageOptions: {
+      map: 'fedcbaZYXWVUTSRQPONMLKJIHGFEDCBA-_9876543210zyxwvutsrqponmlkjihg',
+      segments: 6,
+      multiplier: 30,
+    },
+  };
+}
+
 class Xcx310AlgoConfig implements H5stAlgoConfigType {
   version = '3.1';
   tokenVersion = LocalTokenVersion['03'];
@@ -2038,6 +2084,7 @@ export const H5stAlgoConfigCollection: Record<string, H5stAlgoConfigType> = {
   '5.2.4': new H5st524AlgoConfig(),
   '5.2.5': new H5st525AlgoConfig(),
   '5.2.6': new H5st526AlgoConfig(),
+  '5.2.7': new H5st527AlgoConfig(),
   'xcx3.1.0': new Xcx310AlgoConfig(),
   'xcx4.2.0': new Xcx420AlgoConfig(),
   'xcx4.7.1': new Xcx471AlgoConfig(),
@@ -2045,6 +2092,6 @@ export const H5stAlgoConfigCollection: Record<string, H5stAlgoConfigType> = {
   'xcx4.9.2': new Xcx492AlgoConfig(),
 };
 
-export const DEFAULT_H5ST_VERION = '5.2.6';
+export const DEFAULT_H5ST_VERION = '5.2.7';
 export const SUPPORT_H5ST_VERION = Object.keys(H5stAlgoConfigCollection);
 export const SUPPORT_H5ST_VERION_STR = SUPPORT_H5ST_VERION.join('、') + '。默认版本：' + DEFAULT_H5ST_VERION;
