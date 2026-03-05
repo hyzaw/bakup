@@ -90,6 +90,51 @@ export class CustomAlgorithm {
     },
     Base64: {
       ...CryptoJS.enc.Base64,
+      stringify: (wordArray: CryptoJS.lib.WordArray): string => {
+        if (this.clsService.get('h5stContext._version') < '5.3') {
+          return CryptoJS.enc.Base64.stringify(wordArray);
+        }
+
+        const map = this.clsService.get('h5stContext.customAlgorithm')?.map ?? '';
+        if (!map) {
+          throw new Error('该版本算法未配置相关魔改参数');
+        }
+
+        const words = wordArray.words;
+        const sigBytes = wordArray.sigBytes;
+        wordArray.clamp();
+
+        const base64Chars: string[] = [];
+        for (let i = 0; i < sigBytes; i += 3) {
+          const byte1 = (words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+          const byte2 = (words[(i + 1) >>> 2] >>> (24 - ((i + 1) % 4) * 8)) & 0xff;
+          const byte3 = (words[(i + 2) >>> 2] >>> (24 - ((i + 2) % 4) * 8)) & 0xff;
+
+          const triplet = (byte1 << 16) | (byte2 << 8) | byte3;
+          for (let j = 0; j < 4 && i + j * 0.75 < sigBytes; j++) {
+            base64Chars.push(map.charAt((triplet >>> (6 * (3 - j))) & 0x3f));
+          }
+        }
+
+        return base64Chars.join('');
+      },
+      parse: (base64Str: string): CryptoJS.lib.WordArray => {
+        if (this.clsService.get('h5stContext._version') < '5.3') {
+          return CryptoJS.enc.Base64.parse(base64Str);
+        }
+
+        const map = this.clsService.get('h5stContext.customAlgorithm')?.map ?? '';
+        if (!map) {
+          throw new Error('该版本算法未配置相关魔改参数');
+        }
+
+        const reverseMap: number[] = [];
+        for (let j = 0; j < map.length; j++) {
+          reverseMap[map.charCodeAt(j)] = j;
+        }
+
+        return this.parseLoop(base64Str, base64Str.length, reverseMap);
+      },
       encode: (wordArray: CryptoJS.lib.WordArray): string => {
         const map = this.clsService.get('h5stContext.customAlgorithm')?.map ?? '';
         if (!map) {
@@ -194,14 +239,18 @@ export class CustomAlgorithm {
   }
 
   HmacSHA256(message: CryptoJS.lib.WordArray | string, key: CryptoJS.lib.WordArray | string): CryptoJS.lib.WordArray {
-    return CryptoJS.HmacSHA256(this.addSalt(message), this.eKey(key));
+    return CryptoJS.HmacSHA256(this.addSalt(message, true), this.eKey(key));
   }
 
-  addSalt(message: CryptoJS.lib.WordArray | string): CryptoJS.lib.WordArray | string {
+  addSalt(message: CryptoJS.lib.WordArray | string, isHmac?: boolean): CryptoJS.lib.WordArray | string {
     if (typeof message === 'string') {
       const transformMessageOptions = this.clsService.get('h5stContext.customAlgorithm')?.transformMessageOptions;
       if (transformMessageOptions) {
         message = this.transformMessage(message, transformMessageOptions);
+        if (isHmac) {
+          message = message.substring(0, message.length - 2);
+          message = this.transformMessage(message, transformMessageOptions);
+        }
       }
       const salt = this.clsService.get('h5stContext.customAlgorithm')?.salt ?? '';
       return message + salt;
@@ -225,8 +274,13 @@ export class CustomAlgorithm {
       for (let i = Math.min(convertIndex, key.length); i > 0; i--) {
         const pop = slice1.pop();
         const number = pop.charCodeAt(0);
-        const s = String.fromCharCode(158 - number);
-        array.push(s);
+        if (this.clsService.get('h5stContext._version') < '5.3') {
+          const s = String.fromCharCode(158 - number);
+          array.push(s);
+        } else {
+          const s = String.fromCharCode((((number - 32) * 7 + 82) % 95) + 32);
+          array.push(s);
+        }
       }
 
       return array.concat(slice2).join('');

@@ -19,7 +19,7 @@ import { CommandController } from './controller/command.controller';
 import { AlgoService } from './services/algo.service';
 import { CommandService } from './services/command.service';
 import { CustomAlgorithm } from './core/algorithm';
-import { LocalTokenV3, LocalTokenV4, LocalTokenV5 } from './core/token';
+import { LocalTokenV3, LocalTokenV4, LocalTokenV5, LocalTokenV6 } from './core/token';
 import { TokenFactory, H5stFactory } from './core';
 
 @Module({
@@ -50,6 +50,6 @@ import { TokenFactory, H5stFactory } from './core';
     HttpModule,
   ],
   controllers: [AppController, AlgoController, CommandController],
-  providers: [CustomAlgorithm, LocalTokenV3, LocalTokenV4, LocalTokenV5, TokenFactory, H5stFactory, AlgoService, CommandService],
+  providers: [CustomAlgorithm, LocalTokenV3, LocalTokenV4, LocalTokenV5, LocalTokenV6, TokenFactory, H5stFactory, AlgoService, CommandService],
 })
 export class AppModule {}

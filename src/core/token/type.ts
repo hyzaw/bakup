@@ -39,6 +39,7 @@ export enum LocalTokenVersion {
   '03' = '03',
   '04' = '04',
   '05' = '05',
+  '06' = '06',
 }
 
 export interface LocalTokenType {

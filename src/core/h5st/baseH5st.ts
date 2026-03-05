@@ -136,7 +136,9 @@ export class BaseH5st {
    */
   __genDefaultKey(token: string, fingerprint: string, time: string, appId: string): string {
     const input = `${token}${fingerprint}${time}${appId}${this.h5stAlgoConfig.defaultKey.extend}`,
-      express = this.algos.enc.Utf8.stringify(this.algos.enc.Base64.parse(decodeBase64URL(this.__parseToken(token, 16, 28)))),
+      express = this.algos.enc.Utf8.stringify(
+        this.algos.enc.Base64.parse(this.h5stAlgoConfig.version < '5.3' ? decodeBase64URL(this.__parseToken(token, 16, 28)) : this.__parseToken(token, 16, 28)),
+      ),
       expressMatch = /^[123]([x+][123])+/.exec(express);
     let key = '';
     if (expressMatch) {
@@ -334,7 +336,7 @@ export class BaseH5st {
             platform: 'web',
             expandParams: this.envSign(envCollectData, 'wm0!@w-s#ll1flo('),
             fv: this.h5stAlgoConfig.env.fv,
-            localTk: this.localToken.genLocalTK(_fingerprint)
+            localTk: this.localToken.genLocalTK(_fingerprint),
           },
           {
             headers: {
@@ -450,7 +452,7 @@ export class BaseH5st {
 
     const enableRemote = process.env.ENABLE_REMOTE_ALGORITHM === 'true';
     let key = '';
-    
+
     if (enableRemote && _isNormal && __genKey) {
       try {
         key = __genKey(debugParams?.token || _token, _fingerprint, dateStrExtend, _appId, this.algos).toString(this.algos.enc.Hex) || '';
@@ -617,7 +619,11 @@ export class BaseH5st {
     const firstPartArray = charArray.slice(0, convertLength);
     const secondPartArray = charArray.slice(convertLength);
     let finalArray = [];
-    for (; firstPartArray.length > 0; ) finalArray.push((35 - parseInt(firstPartArray.pop(), 36)).toString(36));
+    if (this.h5stAlgoConfig.version < '5.3') {
+      for (; firstPartArray.length > 0; ) finalArray.push((35 - parseInt(firstPartArray.pop(), 36)).toString(36));
+    } else {
+      for (; firstPartArray.length > 0; ) finalArray.push(((5 * parseInt(firstPartArray.pop(), 36) + 13) % 36).toString(36));
+    }
     finalArray = finalArray.concat(secondPartArray);
     return finalArray.join('');
   }
